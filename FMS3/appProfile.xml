@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppConfig>
+	<ShowConsole>true</ShowConsole>
+	<MatchDefaults>
+		<AutonomousChecked>false</AutonomousChecked>
+		<AutonomousTime>0:30</AutonomousTime>
+		<TeleoperatedChecked>true</TeleoperatedChecked>
+		<TeleoperatedTime>2:30</TeleoperatedTime>
+		<PauseBetweenPeriodsChecked>true</PauseBetweenPeriodsChecked>
+	</MatchDefaults>
+	<Sounds>
+		<Start>Resources/CHARGE.wav</Start>
+		<Pause>Resources/3BELLS.wav</Pause>
+		<End>Resources/ENDMATCH.wav</End>
+		<Abort>Resources/FOGHORN.wav</Abort>
+	</Sounds>
+</AppConfig>

@@ -1,0 +1,59 @@
+2015-10-02: Parameterizing the sounds
+
+Each sound has a time mark, a sound file name, a boolean to track if it's played yet or not
+XML will have a boolean for "useTimeAnnounce"
+Then a series of elements, with a file name & time mark for each one
+
+-------------------------------------
+
+Solution 'FMS3' (5 projects)
+
+References: SlimDX
+Also incorporates: MonoBrick
+
+
+"MainWindow"
+-- The primary interface
+-- Two tabs - Setup & Match
+
+"BigTimer.cs"
+-- Child window from main FMS3; designed to be shown on a 2nd monitor
+-- Has functionality to resize the fonts given the size of the window
+
+
+"GenericBrick.cs"
+-- Wrapper for two different classes for connecting to bricks - one for NXT, and one for EV3
+-- Handles trying to connect to a brick via Bluetooth (i.e., via a particular COM port)
+-- Also handles trying to reconnect to a brick where the connection got lost
+-- Accepts commands to play sounds, stop programs, set motors to speeds
+
+"BrickManager.cs"
+-- Maintains the list of 'connected' bricks
+-- Maps brick names to Bluetooth addresses by either WMI or Registry queries
+-- Maps Bluetooh addresses to COM ports
+-- Given a name, returns the 'generic brick' object for that name (includes connectivity info via COM port)
+
+
+"JoystickManager.cs"
+-- Reads in the configuration about different types of joysticks from the "joystickProfiles" XML file
+-- Also keeps track of actual joysticks attached to the system and which type they've been told to be
+
+"JoystickWrapper.cs"
+-- Represents a joystick attached to the system; also, how to interpret the inputs
+-- Reads in what is its current state, and what has changed about its state
+
+"JoystickConfigBean.cs"
+-- Holder of a bunch of data about how a joystick is to be read in from DirectX
+-- Name, what sliders confer L and R drive data, what is the D-pad, and which buttons correspond to which actions
+
+
+"JoystickBrickPair.cs"
+-- Handler for tracking the pairing of a joystick with a brick.
+-- Has several of the operating constants - motor power incrementing levels, direction info for fine motor control, etc.
+-- Keeps track of 'state' - brick reversal (flipped), current power levels for action & driving
+
+
+"Program.cs"
+-- Auto-generated, but I added in some code
+-- Code to pop a dialog box with a stack trace if the app encounters a fatal unhandled exception
+
