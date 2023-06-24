@@ -1,8 +1,14 @@
-﻿using System;
+﻿/*
+ * there is a better way to do this with interfaces and polymorphism
+ * it would be good to rewrite this in the future :)
+ */
+
+
+using System;
 
 namespace FMS3
 {
-	/*
+	/**
 	 * Wrapper class for two different MonoBrick "Brick" classes - EV3.Brick and NXT.Brick
 	 * Keeps track of state
 	 */
@@ -26,9 +32,11 @@ namespace FMS3
 		// "NXT" - brick connected as NXT
 		public const int STATE_NXT = 2;
 
+		public const int STATE_51515 = 3;
+
 		public const int OFFSET_STATE_NAMES = -2;
 		public static string[] STATE_NAMES = new string[] {
-			"LOST", "new", "none", "EV3", "NXT"
+			"LOST", "new", "none", "EV3", "NXT", "51515"
 		};
 
 		// For tracking the motors
@@ -46,20 +54,21 @@ namespace FMS3
 		private MonoBrick.EV3.Brick<MonoBrick.EV3.Sensor, MonoBrick.EV3.Sensor, MonoBrick.EV3.Sensor, MonoBrick.EV3.Sensor> ev3Brick;
 		private MonoBrick.NXT.Brick<MonoBrick.NXT.Sensor, MonoBrick.NXT.Sensor, MonoBrick.NXT.Sensor, MonoBrick.NXT.Sensor> nxtBrick;
 
+		private MonoBrick.FiveOne.Brick fiveOneBrick;
 		//
 		// Constructor: name of brick, COM port to use, and whether this is an EV3 or not
 		// (MonoBrick cannot auto-detect whether or not a brick is EV3)
 		//
-		public GenericBrick(string newBrickName, string newConnName, bool isEv3)
+		public GenericBrick(string newBrickName, string newConnName, bool isEv3, bool isFiveOne)
 		{
 			brickName = newBrickName + "";
 			connName = newConnName + "";
 
-			connectToBrick(isEv3, true);
+			connectToBrick(isEv3, isFiveOne, true);
 		}
 
 		// Attempt to connect to this brick; optionally, play the connection tones to represent a successful connection
-		private void connectToBrick(bool isEv3, bool playConnectTones)
+		private void connectToBrick(bool isEv3, bool isFiveOne, bool playConnectTones)
 		{
 			// Hang on to the prior state
 			int oldState = state;
@@ -97,7 +106,25 @@ namespace FMS3
 				}
 				catch (Exception e)
 				{
+					Console.WriteLine(e.ToString());
+					Console.WriteLine(e.StackTrace);
 					Console.WriteLine("DEBUG: brick=" + brickName + ",conn=" + connName + " - not an EV3");
+				}
+			}
+			/*
+			 * Why not Java?
+			 */
+			else if (isFiveOne)
+			{
+				try
+				{
+					fiveOneBrick = new MonoBrick.FiveOne.Brick(connName);
+					state = STATE_51515;
+					notFound = false;
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine("DEBUG: brick=" + brickName + ",conn=" + connName + " - not an 51515");
 				}
 			}
 			// it's an NXT
@@ -251,6 +278,8 @@ namespace FMS3
 						state = STATE_BROKEN;
 					}
 					break;
+				case STATE_51515:
+					break;
 			}
 
 			return state;
@@ -300,6 +329,16 @@ namespace FMS3
 						state = STATE_BROKEN;
 					}
 					break;
+				case STATE_51515:
+					fiveOneBrick.MotorA.Off();
+					fiveOneBrick.MotorB.Off();
+					fiveOneBrick.MotorC.Off();
+					fiveOneBrick.MotorD.Off();
+					/* Later
+					fiveOneBrick.MotorE.Off();
+					fiveOneBrick.MotorF.Off();
+					*/
+					break;
 			}
 
 			return state;
@@ -333,14 +372,17 @@ namespace FMS3
 						state = STATE_BROKEN;
 					}
 					break;
+				case STATE_51515:
+					fiveOneBrick.stopPrograms();
+					break;
 			}
 
 			return state;
 		}
 
-		//
-		// Set a specific motor to a particular speed. Automatically restricts speed to -100 to 100.
-		//
+		///
+		/// Set a specific motor to a particular speed. Automatically restricts speed to -100 to 100.
+		///
 		public int setMotor(int whichMotor, int speed)
 		{
 			int newSpeed = speed;
@@ -358,6 +400,38 @@ namespace FMS3
 				case STATE_NXT:
 					setNxtMotor(whichMotor, newSpeed);
 					break;
+				case STATE_51515:
+					setFiveOneMotor(whichMotor, newSpeed);
+					break;
+			}
+
+			return state;
+		}
+
+		private int setFiveOneMotor(int whichMotor, int speed) {
+
+
+			try
+			{
+				switch (whichMotor)
+				{
+					case MOTOR_A:
+						fiveOneBrick.MotorA.On((sbyte)speed);
+						break;
+					case MOTOR_B:
+						fiveOneBrick.MotorB.On((sbyte)speed);
+						break;
+					case MOTOR_C:
+						fiveOneBrick.MotorC.On((sbyte)speed);
+						break;
+					case MOTOR_D:
+						fiveOneBrick.MotorD.On((sbyte)speed);
+						break;
+				}
+			}
+			catch (Exception e)
+			{
+				state = STATE_BROKEN;
 			}
 
 			return state;
@@ -438,13 +512,13 @@ namespace FMS3
 				if (ev3Brick != null)
 				{
 					ev3Brick.Connection.Close();
-					connectToBrick(true, true);
+					connectToBrick(true, false, true);
 					//state = STATE_EV3;
 				}
 				else
 				{
 					nxtBrick.Connection.Close();
-					connectToBrick(false, true);
+					connectToBrick(false, false, true);
 					//state = STATE_NXT;
 				}
 			}

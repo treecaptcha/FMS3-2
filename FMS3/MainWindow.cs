@@ -388,17 +388,28 @@ namespace FMS3
 			if (!thisBrick.Contains("["))
 			{
 				// We can't tell via software the brick type, so we need to ask
+				/*
+				 * I have no clue how to make proper dialog boxes  
+				 */
 				DialogResult result = MessageBox.Show("Is '" + thisBrick + "' brick an EV3?", "Brick Type",
 					MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 				bool isEv3 = true;
-				if (result == DialogResult.No)
+				bool isFiveOne = false;
+				DialogResult? resulte = null;
+				if (result == DialogResult.No) {
 					isEv3 = false;
-
+					MessageBox.Show("Is '" + thisBrick + "' brick an 51515?", "Brick Type",
+						MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+					if (!(resulte == DialogResult.No)) {
+						isFiveOne = true;
+					}
+				}
+				
 				// The user didn't cancel, right?
 				if (result != DialogResult.Cancel)
 				{
 					// Attempt to connect to the brick, passing in whether or not the user identified it as an EV3 or not
-					GenericBrick newBrick = brickManager.getBrickByName(thisBrick, isEv3);
+					GenericBrick newBrick = brickManager.getBrickByName(thisBrick, isEv3, isFiveOne);
 
 					// Did we get a connection?
 					if (newBrick != null)

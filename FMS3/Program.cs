@@ -14,6 +14,8 @@ namespace FMS3
 			// M.O'C - Code to pop a dialog box with a stack trace if the app encounters a fatal unhandled exception [part 1]
 			AppDomain.CurrentDomain.UnhandledException +=
 				new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+			BrickManager.getInstance().getBrickByName("COM3", false, true);
+
 			Application.EnableVisualStyles();
 			Application.SetHighDpiMode(HighDpiMode.SystemAware);
 			Application.SetCompatibleTextRenderingDefault(false);

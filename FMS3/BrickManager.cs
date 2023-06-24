@@ -2,6 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Management;
+using InTheHand.Net.Sockets;
+using MonoBrick.FiveOne;
+using System.Management;
+using System.Management.Automation.Security;
+using System.Media;
+using System.IO.Ports;
 
 namespace FMS3
 {
@@ -60,36 +66,118 @@ namespace FMS3
 		}
 
 		//
-		// Find all bricks attached to the system.
-		// "Attached" means they have been connected via Bluetooth (independent of this software).
-		// Different Bluetooth stacks store brick names, Bluetooth IDs, and associated COM ports differently - WMI vs. registry
+		/// Find all bricks attached to the system.
+		/// "Attached" means they have been connected via Bluetooth (independent of this software).
+		/// Different Bluetooth stacks store brick names, Bluetooth IDs, and associated COM ports differently - WMI vs. registry
 		//
 		public List<string> getListOfAttachedBricks()
 		{
+			
+			
+
+			lock (this)
+			{
+
+				Console.WriteLine("DEBUG: getListOfAttachedBricks() *** doing everything");
+				BluetoothClient client = new BluetoothClient();
+				List<string> items = new List<string>();
+				IReadOnlyCollection<BluetoothDeviceInfo> devices = client.DiscoverDevices();
+				foreach (BluetoothDeviceInfo d in devices)
+				{
+					// get bluetooth devices that are connected, have a com port 
+					if (d.Connected)
+					{
+						Console.WriteLine("DEBUG: buildBtToComDict *** Investigating " + d.DeviceName);
+						string comPort = GetBluetoothPort(d.DeviceAddress.ToString());
+						Console.WriteLine("DEBUG: buildBtToComDict *** " + d.DeviceName + " has com port " + comPort);
+						if (!string.IsNullOrWhiteSpace(comPort))
+						{
+							// to add
+							Console.WriteLine("DEBUG: checkAndAddBtNamePair() ~ BTaddress=" + d.DeviceName +
+							                  ",brickName=" + d.DeviceName + "~" + comPort);
+
+							if (!namesToComms.ContainsKey(d.DeviceName))
+							{
+								Console.WriteLine(
+									"DEBUG: checkAndAddBtNamePair() ~~ Adding new pair to namesToComms: " +
+									d.DeviceName + "~" + comPort);
+								namesToComms.Add(d.DeviceName, comPort);
+							}
+
+							string listName = d.DeviceName + "";
+							if (namesToBricks.ContainsKey(d.DeviceName))
+							{
+								GenericBrick checkBrick = namesToBricks[d.DeviceName];
+								//listName = listName + " [" + GenericBrick.STATE_NAMES[checkBrick.getState() - GenericBrick.OFFSET_STATE_NAMES] + "]";
+								listName = listName + " [" + checkBrick.getStateName() + "]";
+							}
+
+							items.Add(listName);
+						}
+
+					}
+				}
+
+				Console.WriteLine("DEBUG: getListOfAttachedBricks() *** items: " + items);
+				return items;
+			}
+
+
+
+
 			Dictionary<string, string> btToComDict = buildBtToComDict();
 
 			//////////////////////////////////////
 			Console.WriteLine("DEBUG: getListOfAttachedBricks() **** Querying for Bluetooth<~>Name relationships {to build 'Name<~>COM' map}");
 
 			// Try WMI query first
-			List<string> brickList = queryBtToNameFromWmi(btToComDict);
+			List<string> brickList = queryBtToName(btToComDict);
 
 			// If we found zero (0) bricks via WMI, try a registry query
 			if (brickList.Count == 0)
 			{
-				Console.WriteLine("DEBUG: getListOfAttachedBricks() !!! None found via WMI; trying Registry");
-				brickList = queryBtToNameFromRegistry(btToComDict);
+				Console.WriteLine("DEBUG: getListOfAttachedBricks() !!! None found! Nothing left to try :(");
 			}
 
 			brickList.Sort();
 			return brickList;
 		}
 
+		
+		
+		
+		
+		
+		
+		
 		//
-		// Locate all Bluetooth connections, where the devices are Mindstorms bricks, and identify the associated COM ports
+		/// Locate all Bluetooth connections, where the devices are Mindstorms bricks, and identify the associated COM ports
 		//
 		private static Dictionary<string, string> buildBtToComDict()
 		{
+			
+			Dictionary<string, string> btCom = new Dictionary<string, string>();
+			BluetoothClient client = new BluetoothClient();
+			List<string> items = new List<string>();
+			IReadOnlyCollection<BluetoothDeviceInfo> devices = client.DiscoverDevices();
+			foreach (BluetoothDeviceInfo d in devices)
+			{
+				// get bluetooth devices that are connected, have a com port 
+				if (d.Connected)
+				{
+					Console.WriteLine("DEBUG: buildBtToComDict *** Investigating " + d.DeviceName);
+					string comPort = GetBluetoothPort(d.DeviceAddress.ToString());
+					Console.WriteLine("DEBUG: buildBtToComDict *** " + d.DeviceName + " has com port " + comPort);
+					if (!string.IsNullOrWhiteSpace(comPort))
+					{
+						btCom.Add(d.DeviceAddress.ToString(), comPort);
+					}
+
+				}
+			}
+
+			return btCom;
+			
 			// Run a COM query to get the COM ports (in the 'Caption') for Mindstorms BT connections
 			Console.WriteLine("DEBUG: buildBtToCom() **** Querying for Bluetooth<~>COM relationships");
 			Dictionary<string, string> btToComDict = new Dictionary<string, string>();
@@ -132,6 +220,107 @@ namespace FMS3
 				Console.WriteLine("ERROR: buildBtToCom() - Error executing BT/com query");
 			}
 			return btToComDict;
+			
+		}
+
+		private List<string> queryBtToName(Dictionary<string, string> btToComDict)
+		{
+			List<string> Names = new List<string>();
+			BluetoothClient client = new BluetoothClient();
+			List<string> items = new List<string>();
+			IReadOnlyCollection<BluetoothDeviceInfo> devices = client.DiscoverDevices();
+			foreach (BluetoothDeviceInfo d in devices)
+			{
+				// get bluetooth devices that are connected 
+				if (d.Connected)
+				{
+					checkAndAddBtNamePair(btToComDict, Names, d.DeviceName, d.DeviceAddress.ToString());
+				}
+			}
+
+			return Names;
+		}
+		
+		private static string GetBluetoothPort(string deviceAddress)
+		{
+			Console.WriteLine("DEBUG: buildBtToCom() **** Querying for Bluetooth<~>COM relationships");
+			Dictionary<string, string> btToComDict = new Dictionary<string, string>();
+			const string ComQueryString = "SELECT Caption,PNPDeviceID FROM Win32_PnPEntity " +
+			                              "WHERE ConfigManagerErrorCode = 0 AND " +
+			                              "Caption LIKE 'Standard Serial over Bluetooth link (COM%'";
+			SelectQuery ComWMIquery = new SelectQuery(ComQueryString);
+			ManagementObjectSearcher ComWMIqueryResults = new ManagementObjectSearcher(ComWMIquery);
+
+			// Did we get a result?
+			if (ComWMIqueryResults != null)
+			{
+				//Console.WriteLine("Com query... The following bricks were found on your system:");
+				foreach (object result in ComWMIqueryResults.Get())
+				{
+					ManagementObject mo = (ManagementObject)result;
+					object captionObject = mo.GetPropertyValue("Caption");
+					object pnpIdObject = mo.GetPropertyValue("PNPDeviceID");
+
+					// Get the COM port name out of the Caption, requires a little search and replacing.
+					string caption = captionObject.ToString();
+					string comPort = caption.Substring(caption.LastIndexOf("(COM")).
+						Replace("(", string.Empty).Replace(")", string.Empty);
+					Console.WriteLine("pnpIdObject.TOString():" + pnpIdObject.ToString());
+					// Extract the BT address from the PNPObjectID property
+
+					// add to dictionary
+					if (pnpIdObject.ToString().Contains(deviceAddress))
+					{
+						return comPort;
+					}
+					//Console.WriteLine("COM Port: {0} ", comPort);
+					//Console.WriteLine("BT Addr:  {0} ", BTaddress);
+					//Console.WriteLine("");
+				}
+			}
+			else
+			{
+				Console.WriteLine("ERROR: buildBtToCom() - Error executing BT/com query");
+			}
+			return null;
+			
+		
+
+			
+			
+			
+			
+			
+			
+			
+			const string Win32_SerialPort = "Win32_SerialPort";
+			Console.WriteLine("querrieing");
+			SelectQuery q = new SelectQuery(Win32_SerialPort);
+			Console.WriteLine("querrieing done");
+
+			ManagementObjectSearcher s = new ManagementObjectSearcher(q);
+			ManagementObjectCollection sak = s.Get();
+			foreach (ManagementBaseObject cur in sak)
+			{
+				ManagementObject mo = (ManagementObject)cur;
+				string pnpId = mo.GetPropertyValue("PNPDeviceID").ToString();
+
+				if (pnpId.Contains(deviceAddress))
+				{
+					object captionObject = mo.GetPropertyValue("Caption");
+					string caption = captionObject.ToString();
+					int index = caption.LastIndexOf("(COM");
+					if (index > 0)
+					{
+						string portString = caption.Substring(index);
+						string comPort = portString.
+							Replace("(", string.Empty).Replace(")", string.Empty);
+						Console.WriteLine("done with getting port");
+						return comPort;
+					}
+				}              
+			}
+			return null;
 		}
 
 		//
@@ -296,7 +485,7 @@ namespace FMS3
 		// Returns a reference to a 'generic brick' wrapper, given a brick name;
 		// attempts to reconnect the brick if it has been disconnected
 		//
-		public GenericBrick getBrickByName(string fullName, bool isEv3)
+		public GenericBrick getBrickByName(string fullName, bool isEv3, bool isFiveOne)
 		{
 			string name = stripExtensionFromName(fullName);
 
@@ -311,7 +500,7 @@ namespace FMS3
 			string newComPort = namesToComms[name];
 
 			// try to connect
-			GenericBrick newBrick = new GenericBrick(name, newComPort, isEv3);
+			GenericBrick newBrick = new GenericBrick(name, newComPort,  isEv3, isFiveOne);
 			if (newBrick.getState() > 0)
 			{
 				// add the brick to the dictionary
